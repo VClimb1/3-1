@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3:1 Descent Trainer</title>
+<style>
+  body { 
+    font-family: monospace; 
+    background-color: #1e1e1e; 
+    color: #f0f0f0; 
+    padding: 20px; 
+    font-size: 24px;
+  }
+  h2 { 
+    color: #ffd966; 
+    font-size: 32px; 
+  }
+  #question { 
+    font-size: 28px; 
+    margin-top: 20px;
+  }
+  input { 
+    font-size: 28px; 
+    width: 450px; 
+    padding: 12px; 
+    margin-top: 10px; 
+    border-radius: 8px; 
+    border: none; 
+  }
+  #answerBox { 
+    background: #2c2c2c; 
+    padding: 20px; 
+    border-radius: 10px; 
+    margin-top: 20px; 
+    font-size: 24px; 
+    white-space: pre-wrap;
+  }
+  .green { color: #00ff00; } /* green for absolute answers */
+  .cyan { color: #00ffff; } /* cyan for absolute answers */
+  .userAnswer { font-size: 28px; font-style: italic; }
+</style>
+</head>
+<body>
+<h2>3:1 Descent Trainer</h2>
+<div id="question"></div>
+<input type="text" id="answerInput" placeholder="Type answer here (xxx/xxxx)">
+<div id="answerBox"></div>
+
+<script>
+const groupA = [39000,38000,37000,36000,35000,34000,33000,32000,31000,30000,29000,28000,27000,26000,25000,24000,23000,22000,21000,20000,19000,18000,17000,16000,15000,14000,13000,12000,11000,10000];
+const groupB_IFR = [10000,9000,8000,7000,6000,5000,4000,3000,2000];
+const groupB_VFR = [9500,8500,7500,6500,5500,4500,3500,2500,1500];
+const speeds = [100,120,140,160,180,200,220,240,250,260,280,300,320,340,360,380,400,420,440,460,480,500];
+
+let questionCount = 0;
+let currentAnswer = null;
+let currentType = "original";
+
+const questionDiv = document.getElementById("question");
+const answerBox = document.getElementById("answerBox");
+const inputBox = document.getElementById("answerInput");
+
+function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function pickSpeed(alt){ 
+  let allowed = alt >= 11000 ? speeds.filter(s => s >= 280) : speeds.filter(s => s <= 280); 
+  return rand(allowed); 
+}
+function displayAlt(a){ return (a>=18000 && a%1000===0) ? "FL"+(a/100) : a+" MSL"; }
+
+function generateOriginal(){
+  let useGroupB = Math.random()<0.6;
+  let start,end;
+
+  if(useGroupB){
+    let IFRtoVFR = Math.random()<0.4;
+    if(IFRtoVFR){
+      end = rand(groupB_VFR);
+      start = rand(groupB_IFR.filter(a=>a>end));
+    } else {
+      let pool = groupB_IFR.concat(groupB_VFR);
+      start = rand(pool);
+      end = rand(pool.filter(a=>a<start));
+    }
+  } else {
+    start = rand(groupA);
+    end = rand(groupA.filter(a=>a<start));
+  }
+
+  let diff = start - end;
+  let distance = diff/1000*3;
+  let gs = pickSpeed(start);
+  let rod = gs*5;
+
+  currentAnswer = {start,end,diff,distance,gs,rod};
+  questionDiv.innerHTML = `Question: You are at ${displayAlt(start)}, and are told to descend to ${displayAlt(end)}. Your ground speed is ${gs} KTS.`;
+}
+
+function generateLatter(){
+  const altList=[];
+  for(let i=1;i<=40;i++){ altList.push(i*1000); }
+  let chosen=[];
+  while(chosen.length<5){
+    let pick=rand(altList);
+    if(!chosen.includes(pick)) chosen.push(pick);
+  }
+  currentAnswer = chosen.map(a=>({alt:a,dist:a/1000*3}));
+  questionDiv.innerHTML = `Latter Question: How many miles does it take to lose the following altitudes: ${chosen.join(" ft, ")} ft`;
+}
+
+function processAnswer(input){
+  const numbers = input.match(/\d+(\.\d+)?/g)?.map(Number)||[];
+  let outputHTML = "";
+
+  // Show user's typed answer first, bigger and italic
+  outputHTML += `<span class="userAnswer">${input}</span>\n\n`;
+
+  if(currentType==="original"){
+    outputHTML += `You are at ${displayAlt(currentAnswer.start)}, and are told to descend to ${displayAlt(currentAnswer.end)}. Your ground speed is ${currentAnswer.gs} KTS.\n`;
+    outputHTML += `Altitude to lose: ${currentAnswer.start} - ${currentAnswer.end} = <span class="green">${currentAnswer.diff} ft</span>\n`;
+    outputHTML += `${(currentAnswer.diff/1000).toFixed(1)} × 3 = <span class="cyan">${currentAnswer.distance.toFixed(1)}</span> NM\n\n`;
+    outputHTML += `Rate of descent: ${currentAnswer.gs} × 5 = <span class="green">${currentAnswer.rod} FPM</span>`;
+  } else {
+    let correct = true;
+    for(let i=0;i<currentAnswer.length;i++){ if(numbers[i]!==currentAnswer[i].dist) correct=false; }
+    outputHTML += correct ? "correct\n\n" : "incorrect\n\n";
+    currentAnswer.forEach(a=>outputHTML += `${a.alt} × 3 = <span class="cyan">${a.dist}</span> NM\n`);
+  }
+
+  answerBox.innerHTML = outputHTML;
+
+  // Generate next question
+  questionCount++;
+  currentType = (questionCount % 6 === 5) ? "latter" : "original";
+  if(currentType==="latter") generateLatter(); else generateOriginal();
+}
+
+inputBox.addEventListener("keydown", function(e){
+  if(e.key === "Enter"){
+    if(inputBox.value.trim()!==""){
+      processAnswer(inputBox.value);
+      inputBox.value = "";
+      inputBox.focus();
+    }
+  }
+});
+
+// Start first question
+generateOriginal();
+</script>
+</body>
+</html>
